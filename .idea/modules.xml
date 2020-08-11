@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Zak.Discord.Bot.iml" filepath="$PROJECT_DIR$/.idea/Zak.Discord.Bot.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../University Work/First Year/Applications Of Programming Principles/ZakApp/.idea/ZakApp.iml" filepath="$PROJECT_DIR$/../University Work/First Year/Applications Of Programming Principles/ZakApp/.idea/ZakApp.iml" />
     </modules>
   </component>
 </project>

@@ -1,7 +1,9 @@
-[
-    {
-        "name": "zak#6030",
-        "id": 104265011714592768,
-        "rep": 7
-    }
-]
+{
+    "server_id": "test",
+    "server_name": "xxxx",
+    "members": [{"name": "Zak Yeomanson",
+                "id": "test",
+                "rep": 0
+                }
+                ]
+}
