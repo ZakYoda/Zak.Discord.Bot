@@ -180,7 +180,7 @@ async def add_reaction_roles(ctx, msg_id=None, role_name=None, emoji_name=None):
             return
 
     await ctx.channel.send("{} {} {}".format(msg_id, role_name, emoji_name))  # This is a temporary return...
-
+# this is a test
 
 if __name__ == "__main__":
     client.run(read_token())
