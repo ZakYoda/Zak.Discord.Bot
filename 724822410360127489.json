@@ -1,0 +1,11 @@
+{
+    "server_name": "EXAMPLE",
+    "server_id": 724822410360127488,
+    "reaction_roles": [
+        {
+            "msgID": "745683654017024140",
+            "role_name": "Computing",
+            "role_emoji": "🟥"
+        }
+    ]
+}
