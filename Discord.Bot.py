@@ -1,8 +1,7 @@
 """
 Hey, this is my simple Discord Bot I created for my Server.
 
-It's not coded in the best way, but it seems to work fine. I use the discord.py API to allow me to access my Discord Bot
-via Python.
+I use the discord.py API to allow me to access my Discord Bot via Python.
 """
 
 from discord.ext import commands
@@ -29,10 +28,7 @@ def read_token():
 
 @client.event
 async def on_ready():
-    """This function is run when the bot is first run and logged in.
-    At the moment it's coded quite badly, as I've hardcoded the channelIDs and messageIDs. For the moment, it's fine.
-    But definitely needs changing.
-    """
+    """This function is run when the bot is first run and logged in."""
     print('Logged in as')
     print(client.user.name)
     print(client.user.id)
@@ -41,12 +37,8 @@ async def on_ready():
 
 @client.event
 async def on_guild_join(guild):
-    """This is an unfinished side thing. Need to get around to finishing this.
-    At the moment, all it does is, once the bot joins a discord server it will create a json file storing all user's
-    info such as their name, id and rep. It also records the servers name, id and members.
-
-    To finish, I want to add reaction-role stuff here. Such as the message ID and what reactions give what roles.
-    This way it can change variably rather than being hard-coded."""
+    """This function is run whenever the bot first joins a guild.
+    Upon joining, it sets up a local .json file with some information necessary for certain commands."""
 
     data = {"server_name": guild.name,
             "server_id": guild.id,
@@ -83,16 +75,6 @@ async def on_raw_reaction_add(payload):
             await member.add_roles(role_to_give)
 
 
-@client.event
-async def on_message(message):
-
-    if message.author == client.user:  # bot ignores its own commands
-        return
-
-    # Add this line so we can still process bot.command() stuff (otherwise it overwrites)
-    await client.process_commands(message)
-
-
 @client.command(pass_context=True)
 @commands.has_permissions(administrator=True)
 async def add_reaction_role_help(ctx):
@@ -106,14 +88,18 @@ Note that this must be done in the same channel as the message. (commands may be
 @client.command(pass_context=True)
 @commands.has_permissions(administrator=True)
 async def add_reaction_role(ctx, msg_id=None, role_name=None, emoji_name=None):
+    """This function allows Administrators of the server to add reaction-based-roles onto their server.
+    It uses .json files to keep track of all information"""
+
     if not msg_id or not role_name or not emoji_name:
         await ctx.channel.send("Error, please provide 3 arguments. See help via add_reaction_role_help")
         return
 
     try:
-        _ = await ctx.channel.fetch_message(msg_id)
+        msg = await ctx.channel.fetch_message(msg_id)
     except discord.NotFound:
         await ctx.channel.send("Error, please check the message ID and try again!")
+        return
     except Exception as e:
         await ctx.channel.send("Error, uh oh: {}".format(str(e)))
         return
@@ -154,7 +140,7 @@ async def add_reaction_role(ctx, msg_id=None, role_name=None, emoji_name=None):
     with open("{}.json".format(ctx.guild.id), "w", encoding="utf-8") as f:
         dump(json_data, f, ensure_ascii=False, indent=4)
 
-    await ctx.channel.send("Done!")
+    await msg.add_reaction(emoji_name)
 
 
 @client.command(pass_context=True)
@@ -166,13 +152,39 @@ async def remove_reaction_role_help(ctx):
         `.remove_reactions 751177943174217738`""")
 
 
-# TODO Create remove_reaction_role() function/command.
 @client.command(pass_context=True)
 @commands.has_permissions(administrator=True)
 async def remove_reactions(ctx, msg_id=None):
-    pass
+    """Allows discord server administrators to remove reaction-roles if needed."""
 
-# TODO Bug Testing / Debugging necessary.
+    if not msg_id:
+        await ctx.channel.send("Please provide a message ID as an argument!")
+        return
+
+    try:
+        msg = await ctx.channel.fetch_message(msg_id)
+    except discord.NotFound:
+        await ctx.channel.send("Error, please check the message ID and try again!")
+        return
+    except Exception as e:
+        await ctx.channel.send("Error, uh oh: {}".format(str(e)))
+        return
+
+    json_data = get_json_data("{}.json".format(ctx.guild.id))
+
+    for i in range(len(json_data["reaction_roles"])):
+        if json_data["reaction_roles"][i]["msgID"] == msg_id:
+            await msg.remove_reaction(json_data["reaction_roles"][i]["role_emoji"], client.user)
+            del json_data["reaction_roles"][i]
+
+    with open("{}.json".format(ctx.guild.id), "w", encoding="utf-8") as f:
+        dump(json_data, f, ensure_ascii=False, indent=4)
+
+
+@client.command(pass_context=True)
+async def creator(ctx):
+    await ctx.channel.send("My Creator is zak#6030")
+    return
 
 
 def get_json_data(json_path):
