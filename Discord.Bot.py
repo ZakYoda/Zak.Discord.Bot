@@ -7,28 +7,14 @@ via Python.
 
 from discord.ext import commands
 import discord
-from json import dump
-from emoji import emojize
+from json import dump, load
+import emojis
 
-# Here I set up the bot and create a bunch of constants that need tidying up in the future. It works for the moment,
-# But it's very messy and I hate it as of now.
-# TODO Get rid of all these constants via alternate coding methods
+
 client = commands.Bot(command_prefix='.')
 MEMBERS_FILENAME = "users.json"
 TOKEN_FILENAME = "token.txt"
 OWNER_ID = 104265011714592768  # ID for my Discord, zak#6030
-
-# I decided to go for a dictionary for each role and their respective emoji to go with the role. At the moment this is
-# hard-coded as a constant, but in the future I plan on changing this. I might, for example, store this data in a JSON
-# file, which can be edited and saved manually via discord commands.
-ROLE_YEARS_AND_EMOJIS = {"Fresher": u"\U0001F4D8", "Second Year": u"\U0001F4D5", "Placement": u"\U0001F4BC",
-                         "Final Year": u"\U0001F4D7", "Postgraduate": u"\U0001F4D9"}
-
-ROLE_COURSES_AND_EMOJIS = {"Business Information Technology": u"\U0001F535", "Computing": u"\U0001F7E2",
-                           "Data Science & Analytics": u"\U0001F7E4",
-                           "Information Technology Management": u"\U0001F7E0", "Computer Networks": u"\U0001F534",
-                           "Cyber Security Management": u"\U0001F7E3", "Forensic Computing & Security": u"\U0001F7E6",
-                           "Software Engineering": u"\U0001F7E8"}
 
 
 def read_token():
@@ -52,18 +38,6 @@ async def on_ready():
     print(client.user.id)
     print('------')
 
-    channel = client.get_channel(740607231787008102)  # TODO Change these IDs so they are not hardcoded
-
-    # Here I store a msg as a variable and add specific reactions to both messages. Makes it easier for users to add
-    # their own reaction.
-    msg = await channel.fetch_message(740607492257742888)
-    for emoji in ROLE_YEARS_AND_EMOJIS.values():
-        await msg.add_reaction(emoji)
-
-    msg = await channel.fetch_message(740607524419665960)
-    for emoji in ROLE_COURSES_AND_EMOJIS.values():
-        await msg.add_reaction(emoji)
-
 
 @client.event
 async def on_guild_join(guild):
@@ -76,7 +50,6 @@ async def on_guild_join(guild):
 
     data = {"server_name": guild.name,
             "server_id": guild.id,
-            "roles_max": 0,
             "reaction_roles": []}
 
     with open("{}.json".format(guild.id), "w+", encoding="utf-8") as f:
@@ -97,52 +70,17 @@ async def on_raw_reaction_add(payload):
     guild_id = payload.guild_id
     guild = discord.utils.find(lambda g: g.id == guild_id, client.guilds)
 
-    if message_id == 740607492257742888:
-        for role, emoji in ROLE_YEARS_AND_EMOJIS.items():
-            if payload.emoji.name == emoji:
-                role_to_give = discord.utils.get(guild.roles, name=role)
+    json_data = get_json_data("{}.json".format(guild_id))
 
-    elif message_id == 740607524419665960:
-        for role, emoji in ROLE_COURSES_AND_EMOJIS.items():
-            if payload.emoji.name == emoji:
-                role_to_give = discord.utils.get(guild.roles, name=role)
+    for role_dict in json_data["reaction_roles"]:
+        if role_dict["msgID"] == str(message_id) and role_dict["role_emoji"] == payload.emoji.name and \
+                json_data["server_id"] == guild_id:
+            role_to_give = discord.utils.get(guild.roles, name=role_dict["role_name"])
 
     if role_to_give:
         member = discord.utils.find(lambda m: m.id == payload.user_id, guild.members)
         if member:
             await member.add_roles(role_to_give)
-
-
-@client.event
-async def on_member_update(before, after):
-    """Function is run when a member is updated, e.g a new role is given.
-    This is quite complicated, and can definitely be improved, but for now it works (lol). It took me longer than it
-    should have to figure how to do this.
-
-    Basically it only allows users to have one role out of a set list of roles x2. e.g The user can have the roles
-    First Year and Computing together. But NOT First Year and Second Year roles together."""
-
-    new_role = list(set(after.roles) - set(before.roles))  # Gives us the difference between the before and after roles
-    year_count = 0
-    course_count = 0
-
-    if len(new_role) == 0:
-        return
-
-    for role in after.roles:
-        if role.name in ROLE_YEARS_AND_EMOJIS.keys():
-            year_count += 1
-        elif role.name in ROLE_COURSES_AND_EMOJIS.keys():
-            course_count += 1
-
-    if year_count > 1:
-        for role in after.roles:
-            if role.name in ROLE_YEARS_AND_EMOJIS.keys() and role.name != new_role[0].name:
-                await after.remove_roles(role)
-    elif course_count > 1:
-        for role in after.roles:
-            if role.name in ROLE_COURSES_AND_EMOJIS.keys() and role.name != new_role[0].name:
-                await after.remove_roles(role)
 
 
 @client.event
@@ -159,27 +97,89 @@ async def on_message(message):
 @commands.has_permissions(administrator=True)
 async def add_reaction_role_help(ctx):
     await ctx.channel.send("""To add reaction roles, the format is:
-        `.add_reaction_role {message ID} {role name} {emoji name}`
+        `.add_reaction_role {message ID} {role name} {emoji}`
         For example:
-        `.add_reaction_role [656201333698854932] [YouTuber] [red_square]`""")
+        `.add_reaction_role 656201333698854932 "Old Man" :red_square:`
+Note that this must be done in the same channel as the message. (commands may be deleted after)""")
 
 
-# TODO Finish this command. Need to add a check for the emoji_name parameter using
-# https://pypi.org/project/emoji/
 @client.command(pass_context=True)
 @commands.has_permissions(administrator=True)
-async def add_reaction_roles(ctx, msg_id=None, role_name=None, emoji_name=None):
+async def add_reaction_role(ctx, msg_id=None, role_name=None, emoji_name=None):
     if not msg_id or not role_name or not emoji_name:
         await ctx.channel.send("Error, please provide 3 arguments. See help via add_reaction_role_help")
         return
 
+    try:
+        _ = await ctx.channel.fetch_message(msg_id)
+    except discord.NotFound:
+        await ctx.channel.send("Error, please check the message ID and try again!")
+    except Exception as e:
+        await ctx.channel.send("Error, uh oh: {}".format(str(e)))
+        return
+
+    found_role = False
     for role in ctx.guild.roles:
         if role.name == role_name:
-            await ctx.channel.send("Error, could not find the Role! Make sure spelling and capitalisation are "
-                                   "correct!")
-            return
+            found_role = True
 
-    await ctx.channel.send("{} {} {}".format(msg_id, role_name, emoji_name))  # This is a temporary return...
+    if not found_role:
+        await ctx.channel.send("Error, could not find the Role! Make sure spelling and capitalisation are "
+                               "correct!")
+        return
+
+    if emojis.count(emoji_name) < 1:
+        await ctx.channel.send("Error, please enter an emoji! e.g :red_square:")
+        return
+    elif emojis.count(emoji_name) > 1:
+        await ctx.channel.send("Error, please enter **one** emoji!")
+        return
+
+    json_data = get_json_data("{}.json".format(ctx.guild.id))
+
+    exists = False
+
+    for i in range(len(json_data["reaction_roles"])):
+        try:
+            _ = json_data["reaction_roles"][i][role_name]
+        except KeyError:
+            continue
+        exists = True
+
+    if exists:
+        await ctx.channel.send("Error, role already exists with reaction! Please remove it first.")
+        return
+
+    json_data["reaction_roles"].append({"msgID": msg_id, "role_name": role_name, "role_emoji": emoji_name})
+    with open("{}.json".format(ctx.guild.id), "w", encoding="utf-8") as f:
+        dump(json_data, f, ensure_ascii=False, indent=4)
+
+    await ctx.channel.send("Done!")
+
+
+@client.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def remove_reaction_role_help(ctx):
+    await ctx.channel.send("""To remove all reaction-roles from a message, the format is:
+        `.remove_reactions {message ID}`
+        For example:
+        `.remove_reactions 751177943174217738`""")
+
+
+# TODO Create remove_reaction_role() function/command.
+@client.command(pass_context=True)
+@commands.has_permissions(administrator=True)
+async def remove_reactions(ctx, msg_id=None):
+    pass
+
+# TODO Bug Testing / Debugging necessary.
+
+
+def get_json_data(json_path):
+    """Simple function to return our data in a json form"""
+    with open(json_path, encoding="utf-8") as json_string:
+        return load(json_string)
+
 
 if __name__ == "__main__":
     client.run(read_token())
